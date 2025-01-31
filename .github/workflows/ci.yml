@@ -1,0 +1,43 @@
+name: Build and Push Backend Image
+
+on:
+  push:
+    branches:
+      - 'main'
+    paths:
+      - 'backend/**'
+      - '.github/workflows/ci.yml'
+      - '!docker-compose.yml'
+      - '!env.example'
+      - '!*.md'
+      - '!Caddyfile'
+      - '!.gitignore'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    permissions:
+        contents: read
+        packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+            username: ${{ secrets.DOCKERHUB_USERNAME }}
+            password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/chatbot-backend:latest
+
+      - name: Log out from Docker Hub
+        run: docker logout
