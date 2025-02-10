@@ -1,0 +1,12 @@
+{
+    "messages": [
+        {
+            "role": "system",
+            "content": "completed_games=[1]"
+        },
+        {
+            "role": "user",
+            "content": "your question here"
+        }
+    ]
+}
