@@ -33,12 +33,12 @@ async def chat_endpoint(
                     pass
                 break
 
-        logger.info(f"Completed games: {completed_games}, Team ID: {team_id}")
+        print(f"Completed games: {completed_games}, Team ID: {team_id}")
         
         # Initialize bot with Redis pool from app state
         bot = GeminiMysteryBot(req.app.state.redis_pool)
         
-        response_text = await bot.get_response(
+        response_text, triggered_question = await bot.get_response(
             [{"role": msg.role, "content": msg.content} for msg in request.messages],
             completed_games,
             team_id
@@ -53,7 +53,7 @@ async def chat_endpoint(
                     index=0,
                     message=ChatMessage(
                         role="assistant",
-                        content=response_text
+                        content=f"{response_text}\n\n[Ques: {triggered_question}]"
                     )
                 )
             ],

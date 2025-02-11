@@ -2,7 +2,7 @@ from enum import Enum
 import google.generativeai as genai
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from app.core.config import get_settings
 from app.core.logging import setup_logger
 from app.services.redis import RedisService
@@ -20,10 +20,10 @@ class GameState(Enum):
     GAME_6 = 6
 
 class ClueInfo:
-    def __init__(self, answer: str, required_game: GameState, points: int):
+    def __init__(self, answer: str, required_game: GameState, index: str):
         self.answer = answer
         self.required_game = required_game
-        self.points = points
+        self.index = index
 
 class GeminiMysteryBot:
     def __init__(self, redis_pool: ConnectionPool):
@@ -38,21 +38,29 @@ class GeminiMysteryBot:
             raise
 
         self.clue_pairs = {
-            "where are the medicines?": ClueInfo("kitchen", GameState.GAME_1, 20),
-            "what is the doctor's name?": ClueInfo("John", GameState.GAME_1, 15),
-            "when were the medicines taken?": ClueInfo("yesterday", GameState.GAME_1, 10),
+            "was the victim given the correct dosage?": ClueInfo("Victim was prescribed more than normal dosage, toxicology showed inconsistent drug levels.", GameState.GAME_1, "1a"),
+            "what were the medicines?": ClueInfo("Anti-depressants and anti-anxiety medication", GameState.GAME_1, "1b"),
+            "what was the doctor's hidden motive?": ClueInfo("External pressure, possibly from the company or other interested parties but no solid evidence has been found.", GameState.GAME_1, "1c"),
             
-            "who is the friend?": ClueInfo("Sam", GameState.GAME_2, 30),
-            "what was the medicine dosage?": ClueInfo("low", GameState.GAME_2, 15),
-            "what did the friend leak?": ClueInfo("photos", GameState.GAME_2, 10),
+            "who is the friend?": ClueInfo("Sam", GameState.GAME_2, "2a"),
+            "what was the medicine dosage?": ClueInfo("low", GameState.GAME_2, "2b"),
+            "what did the friend leak?": ClueInfo("photos", GameState.GAME_2, "2c"),
 
-            "What was in the email?": ClueInfo("Confidential Documents", GameState.GAME_3, 40),
-            "What was the name of the company?": ClueInfo("Huli Technologies", GameState.GAME_3, 15),
-            "What was the victim's position in the company?": ClueInfo("CTO", GameState.GAME_3, 10),
+            "what was in the company email?": ClueInfo("Sensitive financial records and corruption reports. Victim probably considered reporting it.", GameState.GAME_3, "3a"),
+            "who sent the company mail?": ClueInfo("Unknown identity, possibly masked through proxy servers.", GameState.GAME_3, "3b"),
+            "who in the company would have been affected with leak?": ClueInfo("Several high-level executives under scrutiny for fraud, manager and recently promoted colleague as well.", GameState.GAME_3, "3c"),
 
-            "Which family member threatened the victim?": ClueInfo("Brother in Law", GameState.GAME_4, 50),
-            "What was the threat from family member?": ClueInfo("Inheritance Dispute", GameState.GAME_4, 15),
-            "How much was the victim going to inherit?": ClueInfo("1 Million USD", GameState.GAME_4, 10),
+            "Which family member threatened the victim?": ClueInfo("Uncle but its uncertain whether its a direct threat or a warning.", GameState.GAME_4, "4a"),
+            "What was the threat from family member?": ClueInfo("Inheritance Dispute", GameState.GAME_4, "4b"),
+            "How much was the victim going to inherit?": ClueInfo("1 Million USD", GameState.GAME_4, "4c"),
+
+            "Which family member threatened the victim?": ClueInfo("Brother in Law", GameState.GAME_5, "5a"),
+            "What was the threat from family member?": ClueInfo("Inheritance Dispute", GameState.GAME_5, "5b"),
+            "How much was the victim going to inherit?": ClueInfo("1 Million USD", GameState.GAME_5, "5c"),
+
+            "Which family member threatened the victim?": ClueInfo("Brother in Law", GameState.GAME_6, "6a"),
+            "What was the threat from family member?": ClueInfo("Inheritance Dispute", GameState.GAME_6, "6b"),
+            "How much was the victim going to inherit?": ClueInfo("1 Million USD", GameState.GAME_6, "6c"),
         }
 
         try:
@@ -94,8 +102,24 @@ class GeminiMysteryBot:
         is_locked_trigger: bool = False
     ) -> str:
         try:
-            system_prompt = """You are a suspicious character in a murder mystery.""" if is_locked_trigger else "Try to be nonchalant"
-            
+            if is_locked_trigger:
+                system_prompt = """You are a suspicious character in a murder mystery. 
+                The user has found a relevant question but hasn't earned the right to know the answer yet. 
+                Generate a misleading response that hints they're on the right track but need to progress further by playing a game on the phone.
+                Keep it concise (1-2 sentences) and natural sounding."""
+            else:
+                system_prompt = """You are a suspicious character in a murder mystery who wants to mislead the investigator. 
+                When given a question:
+                1. If the question asks for factual information, provide incorrect information confidently
+                2. If asked about events, describe them differently from what actually happened
+                3. Use sarcasm and misdirection
+                4. Give irrelevant details that lead nowhere
+                5. Contradict yourself subtly
+                6. Keep responses concise (1-2 sentences)
+                7. Sound natural and conversational
+                
+                Important: Never reveal that you're trying to be misleading."""
+                    
             history_text = "\n".join([
                 f"{msg['role']}: {msg['content']}"
                 for msg in chat_history
@@ -118,7 +142,7 @@ class GeminiMysteryBot:
             logger.error(f"Error generating response: {str(e)}")
             raise
 
-    async def get_response(self, messages: List[Dict], completed_games: List[int], team_id: Optional[str]) -> str:
+    async def get_response(self, messages: List[Dict], completed_games: List[int], team_id: Optional[str]) -> Tuple[str, str]:
         try:
             user_query = next((msg["content"] for msg in reversed(messages) if msg["role"] == "user"), "")
             
@@ -126,6 +150,7 @@ class GeminiMysteryBot:
             if team_id:
                 chat_history = await self.redis_service.get_team_history(team_id)
             
+            index = "none"
             matching_trigger = self.is_similar_to_trigger(user_query)
             
             if matching_trigger:
@@ -133,6 +158,7 @@ class GeminiMysteryBot:
                 
                 if self.has_completed_required_game(matching_trigger, completed_games):
                     response = self.clue_pairs[matching_trigger].answer
+                    index = self.clue_pairs[matching_trigger].index
                 else:
                     response = await self.generate_misleading_response(
                         user_query,
@@ -155,7 +181,7 @@ class GeminiMysteryBot:
                     "content": response
                 })
             
-            return response
+            return response, index
             
         except Exception as e:
             logger.error(f"Error in get_response: {str(e)}")
