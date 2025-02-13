@@ -33,7 +33,7 @@ async def chat_endpoint(
                     pass
                 break
 
-        print(f"Completed games: {completed_games}, Team ID: {team_id}")
+        logger.info(f"Completed games: {completed_games}, Team ID: {team_id}")
         
         # Initialize bot with Redis pool from app state
         bot = GeminiMysteryBot(req.app.state.redis_pool)

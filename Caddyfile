@@ -1,3 +1,0 @@
-api.rycerz.es {
-    reverse_proxy api:8000
-}

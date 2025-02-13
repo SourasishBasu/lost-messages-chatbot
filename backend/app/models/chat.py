@@ -6,7 +6,7 @@ class ChatMessage(BaseModel):
     content: str
 
 class ChatCompletionRequest(BaseModel):
-    model: str = Field(default="gemini-1.5-flash")
+    model: str = Field(default="gemini-2.0-flash-lite-preview-02-05")
     messages: List[ChatMessage]
     temperature: Optional[float] = Field(default=0.9)
     max_tokens: Optional[int] = Field(default=150)
