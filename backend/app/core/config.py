@@ -9,8 +9,7 @@ class Settings(BaseSettings):
     API_KEY: str = os.getenv("API_KEY")
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY")
     REDIS_URL: str = os.getenv("REDIS_URL")
-    REDIS_MIN_POOL_SIZE: int = 2
-    REDIS_MAX_POOL_SIZE: int = 10
+    REDIS_MAX_POOL_SIZE: int = 30
 
 @lru_cache()
 def get_settings():
