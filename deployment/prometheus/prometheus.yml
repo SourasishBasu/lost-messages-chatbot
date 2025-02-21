@@ -1,0 +1,23 @@
+global:
+  scrape_interval: 15s 
+
+alerting:
+
+rule_files:
+
+scrape_configs:
+
+  # Example job for node_exporter
+  - job_name: 'node_exporter'
+    static_configs:
+      - targets: ['172.17.0.1:9100']
+
+  # Example job for cadvisor
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['172.17.0.1:8090']
+
+  # traefik
+  - job_name: 'traefik'
+    static_configs:
+      - targets: ['traefik:8899']
